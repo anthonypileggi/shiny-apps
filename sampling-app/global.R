@@ -3,7 +3,7 @@ library(shinydashboard)
 library(leaflet)
 library(plotly)
 
-quakes <- read.csv(file = poste0(getwd(), "/earthquakes_feb16.csv"))
+quakes <- read.csv(file = paste0(getwd(), "/earthquakes_feb16.csv"))
 names(quakes)[2:3] <- c("lat", "long")
 quakes <- quakes[!is.na(quakes$mag), ]
 
