@@ -2,7 +2,7 @@
 
 You may need to install some packages first:
 ```r
-install.packagesy(shiny)
+install.packages(shiny)
 install.packages(shinydashboard)
 install.packages(leaflet)
 install.packages(plotly)
