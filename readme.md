@@ -14,7 +14,7 @@ You can run this app directly from github:
 shiny::runGitHub(repo = "shiny-apps", username = "anthonypileggi", subdir = "sampling-app")
 
 # Run quality-testing-app
-shiny::runGitHub(repo = "quality-testing-app", 
+shiny::runGitHub(repo = "shiny-apps", 
                  username = "anthonypileggi", 
-                 subdir = "sampling-app")
+                 subdir = "quality-testing-app")
 ```
