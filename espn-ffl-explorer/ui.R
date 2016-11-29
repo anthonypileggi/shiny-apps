@@ -16,7 +16,7 @@ shinyUI(fluidPage(
       h4(textOutput("leagueInfo")),
       tabsetPanel(
         tabPanel("Standings", DT::dataTableOutput('standings')), 
-        tabPanel("Score Dist'n", plotlyOutput("plotScores")),
+        tabPanel("Score Dist'n", plotlyOutput("plotScores", height="500px"))),
         tabPanel("Season Grid", plotlyOutput("plotMatchups", height="600px")),
         tabPanel("Power Rankings", DT::dataTableOutput('power_rankings'),
                                    div("If every team played every other team each week.")) 
