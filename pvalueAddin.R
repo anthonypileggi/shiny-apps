@@ -92,16 +92,16 @@ pvalueAddin <- function() {
     pvalueCode <- reactive({
       switch(input$distribution,
               normal = switch(input$sides,
-                greater = paste0("1-pnorm(",input$test_statistic,")"),
+                greater = paste0("1 - pnorm(",input$test_statistic,")"),
                 less = paste0("pnorm(",input$test_statistic,")"),
-                two = paste0("2*(1-pnorm(abs(",input$test_statistic,")))")),
+                two = paste0("2 * (1 - pnorm(abs(",input$test_statistic,")))")),
               t = switch(input$sides,
-                greater = paste0("1-pt(",input$test_statistic,", df=",input$t_df,")"),
-                less = paste0("pt(",input$test_statistic,", df=",input$t_df,")"),
+                greater = paste0("1 - pt(",input$test_statistic,", df = ",input$t_df,")"),
+                less = paste0("pt(",input$test_statistic,", df = ",input$t_df,")"),
                 two = paste0("2*(1-pt(abs(",input$test_statistic,"), df=",input$t_df,"))")),
-              x2 = paste0("1 - pchisq(",input$test_statistic,", df=",input$x2_df,")"),
-              f = paste0("1 - pf(",input$test_statistic,", df1=",
-                input$f_df1,",df2=",input$f_df2,")"))
+              x2 = paste0("1 - pchisq(",input$test_statistic,", df = ",input$x2_df,")"),
+              f = paste0("1 - pf(",input$test_statistic,", df1 =",
+                input$f_df1,",df2 =",input$f_df2,")"))
     })
     
     output$code <- renderText({
@@ -115,7 +115,7 @@ pvalueAddin <- function() {
       validate(
         need(pvalue(), 'Not enough information to provide a p-value!')
       )
-      paste0("P-value = ", round(pvalue(),3))
+      paste0("p-value = ", round(pvalue(),3))
     })
     
     output$density <- renderPlot({
