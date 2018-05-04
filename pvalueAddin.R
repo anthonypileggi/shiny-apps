@@ -32,8 +32,8 @@ pvalueAddin <- function() {
               ),
               mainPanel(
                 plotOutput("density", height="200px"),
-                verbatimTextOutput("code"),
                 h4(textOutput("pvalue"), align="center"),
+                verbatimTextOutput("code"),
                 actionButton("done", "Generate Code")
               )
             )
@@ -98,10 +98,10 @@ pvalueAddin <- function() {
               t = switch(input$sides,
                 greater = paste0("1 - pt(",input$test_statistic,", df = ",input$t_df,")"),
                 less = paste0("pt(",input$test_statistic,", df = ",input$t_df,")"),
-                two = paste0("2*(1-pt(abs(",input$test_statistic,"), df=",input$t_df,"))")),
+                two = paste0("2 * (1 - pt(abs(",input$test_statistic,"), df = ",input$t_df,"))")),
               x2 = paste0("1 - pchisq(",input$test_statistic,", df = ",input$x2_df,")"),
-              f = paste0("1 - pf(",input$test_statistic,", df1 =",
-                input$f_df1,",df2 =",input$f_df2,")"))
+              f = paste0("1 - pf(",input$test_statistic,", df1 = ",
+                input$f_df1,", df2 = ",input$f_df2,")"))
     })
     
     output$code <- renderText({
@@ -122,8 +122,11 @@ pvalueAddin <- function() {
       req(densityData())
       g1 <- densityData() %>% ggplot(aes(x,y)) + 
                               geom_line() +
-                              labs(x=NULL, y="Density") +
-                              theme_bw()
+                              labs(x=NULL, y=NULL) +
+                              theme_bw() +
+                              theme(axis.text.y = element_blank(),
+                                    axis.ticks.y = element_blank(),
+                                    axis.text.x = element_text(size = rel(2))) 
       if (!is.null(areaData())) {
         g1 <- g1 + geom_area(aes(x=x, y=y), alpha=.5, fill='red', data=areaData())
       }
