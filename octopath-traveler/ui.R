@@ -1,5 +1,5 @@
 material_page(
-  title = "octopath traveler",
+  title = "Octopath Traveler",
   nav_bar_color = "orange darken-4",
   tags$br(),
   
