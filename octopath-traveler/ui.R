@@ -16,8 +16,8 @@ material_page(
     tabs = c(
       "Introduction" = "zero_tab",
       "Character Explorer" = "first_tab",
-      "Character Comparison Tool" = "second_tab",
-      "Nut Distributor (Coming soon)" = "third_tab"
+      "Character Comparison Tool" = "second_tab"
+      #"Nut Distributor (Coming soon)" = "third_tab"
     )
   ),
   
@@ -41,9 +41,9 @@ material_page(
             h4("Character Comparison Tool"),
             p("Compare stats for character pairs at a specific level."),
             br(),
-            h4("Nut Distributor (Coming Soon)"),
-            p("Allocate nuts and view the resulting impact on your characters."),
-            br(),
+            # h4("Nut Distributor (Coming Soon)"),
+            # p("Allocate nuts and view the resulting impact on your characters."),
+            # br(),
             h4("Acknowledgements"),
             p(
               "This app was motivated by ",
