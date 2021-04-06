@@ -12,21 +12,60 @@ shinyServer(function(input, output, session) {
     rv$click <- dplyr::filter(rv$click, id < 0)
     rv$flag <- dplyr::filter(rv$flag, id < 0)
     
-    # randomly draw mine locations
-    rv$mines <- tibble::tibble(
-      id = sample(1:(input$board_size^2), size = input$mines, replace = F),
-      mine = T
-    )
-    
     # construct game board
-    rv$game <- draw_board(input$board_size, rv$mines) %>%
+    rv$game <- draw_board(input$board_size, input$mines) %>%
       compute_counts()
+    
+    # extract mines
+    rv$mines <- dplyr::filter(rv$game, mine)
     
     # start playing
     rv$playing <- T
+    rv$start_time <- Sys.time()
     rv$time_elapsed <- 0
     
-    print(rv$game)
+    print(rv)
+  }
+  
+  # end current game
+  end_game <- function(result = c("win", "loss")) {
+    
+    result <- match.arg(result)
+    
+    # lock gameboard
+    rv$playing <- F
+    
+    # increment if win
+    if (result == "win") {
+      rv$wins <- rv$wins + 1
+      sendSweetAlert(
+        session = session,
+        title = "YOU WIN!",
+        type = "success"
+      )
+    } else {
+      sendSweetAlert(
+        session = session,
+        title = "YOU LOSE!",
+        type = "error"
+      )
+    }
+    
+    # record results to logs
+    out <- dplyr::tibble(
+      player = input$name,
+      country = NA,       # get user location automatically from session-info
+      size = input$board_size,
+      mines = input$mines,
+      result = result,
+      revealed = sum(!rv$click$mine),
+      total = sum(!rv$game$mine),
+      score = revealed / total,     # percent complete ???
+      time_elapsed = as.numeric(round(difftime(rv$current_time, rv$start_time, units = "secs")))
+    )
+
+    bq_append(out, dataset = "minesweeper", table = "history")
+      
   }
   
   
@@ -41,6 +80,8 @@ shinyServer(function(input, output, session) {
       click = tibble::tibble(i = integer(), j = integer(), id = integer(), mine = logical(), count = double()),
       flag = tibble::tibble(i = integer(), j = integer(), id = integer(), mine = logical(), count = double()),
       hover = tibble::tibble(i = integer(), j = integer(), id = integer(), mine = logical(), count = double()),
+      start_time = NULL,
+      current_time = NULL,
       time_elapsed = 0
       )
 
@@ -62,12 +103,7 @@ shinyServer(function(input, output, session) {
   observeEvent(input$new_game, {
     start_new_game()
   })
-  
-  # observe({
-  #   invalidateLater(1000, session)
-  #   rv$time_elapsed <- rv$time_elapsed + 1
-  # })
-  
+
   # update highlighted cell based on user cursor
   observeEvent(input$game_hover, {
     rv$hover <- rv$game %>%
@@ -91,24 +127,30 @@ shinyServer(function(input, output, session) {
         input$game_click$y < j + .5
       )
     if (nrow(new_click) > 0 & rv$playing) {
-      if (!is.element(new_click$id, rv$click$id))
+      if (!is.element(new_click$id, rv$click$id)) {
+        print("click...")
+        print(new_click)
+        print("board")
+        print(rv$game)
+        new_click <- expand_click(rv$game, new_click)
+         # dplyr::filter(id %in% rv$click)  # ignore already clicked cells
+        print(new_click)
         rv$click <- dplyr::bind_rows(rv$click, new_click)
+      }
     }
     print(rv$click)  
 
+    # TODO:  Expand click to reveal all 0's within range
+    
     # check if game is over 
-    #  -- does rv$flags include all mines?  has user clicked every non-mine cell
-    if (all(rv$mines$id %in% rv$flag$id)) {
-      print("YOU WIN!")
-      rv$wins <- rv$wins + 1
-      rv$playing <- F
-    }
+    #  -- does rv$flags include all mines?  
+    # TODO:  has user clicked every non-mine cell
+    if (all(rv$mines$id %in% rv$flag$id))
+      end_game("win")
       
     #  -- does rv$click include a mine?
-    if (any(rv$click$mine)) {
-      print("GAME OVER!")
-      rv$playing <- F
-    }
+    if (any(rv$click$mine))
+      end_game("loss")
     
   })
   
@@ -119,9 +161,10 @@ shinyServer(function(input, output, session) {
   output$gameboard <- renderPlot({
     g <- gameboard()
     if (rv$playing)
-      g <- g + geom_tile(color = "black", fill = "blue", alpha = .25, data = rv$hover)
+      g <- g + geom_tile(color = "black", fill = "blue", alpha = .5, data = rv$hover)
     g +
       geom_tile(color = "black", fill = "red", alpha = .75, data = dplyr::filter(rv$click, mine)) +
+      geom_tile(color = "black", fill = "blue", alpha = .25, data = dplyr::filter(rv$click, !mine)) +
       geom_text(aes(label = count, color = count), size = 14, data = dplyr::filter(rv$click, !mine)) +
       scale_color_gradient2(low = "green", mid = "orange", high = "red", midpoint = 3, limits = c(0, 9), guide = F)
   })
@@ -135,11 +178,16 @@ shinyServer(function(input, output, session) {
     }
   })
   
-  # timer
+  # game timer  
   output$timer <- renderUI({
-    invalidateLater(1000, session)
-    #rv$time_elapsed <- rv$time_elapsed + 1
-    paste("Time Elapsed: ", lubridate::seconds_to_period(rv$time_elapsed))
+    if (rv$playing) {
+      invalidateLater(1000, session)
+      rv$current_time <- Sys.time()
+      tmp <- as.numeric(round(difftime(rv$current_time, rv$start_time, units = "secs")))
+      paste("Time Elapsed: ", lubridate::seconds_to_period(tmp))
+    }
+      
+    
   })
   
   # game status report
@@ -148,8 +196,10 @@ shinyServer(function(input, output, session) {
     if (input$new_game > 0) {
       div(
         h3("Profile"),
-        h4(input$name),
-        paste(rv$wins, "Wins"),
+        #h4(input$name),
+        tags$img(src = input$name),
+        br(),
+        h4(paste(rv$wins, "Wins")),
         hr(),
         h3("Game Status"),
         #paste("Time Elapsed: ", lubridate::seconds_to_period(rv$time_elapsed)),
