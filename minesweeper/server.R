@@ -35,7 +35,8 @@ shinyServer(function(input, output, session) {
     # lock gameboard
     rv$playing <- F
     
-    # increment if win
+    # alert user of game outcome; increment
+    rv$played <- rv$played + 1
     if (result == "win") {
       rv$wins <- rv$wins + 1
       sendSweetAlert(
@@ -61,7 +62,8 @@ shinyServer(function(input, output, session) {
       revealed = sum(!rv$click$mine),
       total = sum(!rv$game$mine),
       score = revealed / total,     # percent complete ???
-      time_elapsed = as.numeric(round(difftime(rv$current_time, rv$start_time, units = "secs")))
+      time_elapsed = as.numeric(round(difftime(rv$current_time, rv$start_time, units = "secs"))),
+      date = Sys.time()
     )
 
     bq_append(out, dataset = "minesweeper", table = "history")
@@ -73,6 +75,7 @@ shinyServer(function(input, output, session) {
   
   rv <- 
     reactiveValues(
+      played = 0,
       wins = 0,
       playing = F,
       mines = tibble::tibble(id = integer(), mine = logical()),
@@ -96,6 +99,10 @@ shinyServer(function(input, output, session) {
       )
   })
   
+  # History
+  history <- reactive({
+    bq_get(dataset = "minesweeper", table = "history")
+  })
   
   # Observers --------------------------
   
@@ -140,17 +147,19 @@ shinyServer(function(input, output, session) {
     }
     print(rv$click)  
 
-    # TODO:  Expand click to reveal all 0's within range
-    
     # check if game is over 
-    #  -- does rv$flags include all mines?  
-    # TODO:  has user clicked every non-mine cell
-    if (all(rv$mines$id %in% rv$flag$id))
-      end_game("win")
+    if (rv$playing) {
       
-    #  -- does rv$click include a mine?
-    if (any(rv$click$mine))
-      end_game("loss")
+      #  -- does rv$flags include all mines? Or, has user clicked every non-mine cell
+      if (all(rv$mines$id %in% rv$flag$id) | sum(!rv$click$mine) == sum(!rv$game$mine))
+        end_game("win")
+      
+      #  -- does rv$click include a mine?
+      if (any(rv$click$mine))
+        end_game("loss")
+      
+    }
+    
     
   })
   
@@ -162,10 +171,13 @@ shinyServer(function(input, output, session) {
     g <- gameboard()
     if (rv$playing)
       g <- g + geom_tile(color = "black", fill = "blue", alpha = .5, data = rv$hover)
+    if (!rv$playing)
+      g <- g + geom_point(color = "red", fill = "red", alpha = .85, size = 3, data = dplyr::filter(rv$game, mine))
+    
     g +
-      geom_tile(color = "black", fill = "red", alpha = .75, data = dplyr::filter(rv$click, mine)) +
+      geom_tile(color = "black", fill = "red", alpha = .65, data = dplyr::filter(rv$click, mine)) +
       geom_tile(color = "black", fill = "blue", alpha = .25, data = dplyr::filter(rv$click, !mine)) +
-      geom_text(aes(label = count, color = count), size = 14, data = dplyr::filter(rv$click, !mine)) +
+      geom_text(aes(label = count, color = count), size = 14, data = dplyr::filter(rv$click, !mine, count != 0)) +
       scale_color_gradient2(low = "green", mid = "orange", high = "red", midpoint = 3, limits = c(0, 9), guide = F)
   })
 
@@ -186,12 +198,10 @@ shinyServer(function(input, output, session) {
       tmp <- as.numeric(round(difftime(rv$current_time, rv$start_time, units = "secs")))
       paste("Time Elapsed: ", lubridate::seconds_to_period(tmp))
     }
-      
-    
   })
   
-  # game status report
-  output$info <- renderUI({
+  # player profile
+  output$profile <- renderUI({
     req(rv$game)
     if (input$new_game > 0) {
       div(
@@ -199,17 +209,80 @@ shinyServer(function(input, output, session) {
         #h4(input$name),
         tags$img(src = input$name),
         br(),
-        h4(paste(rv$wins, "Wins")),
-        hr(),
-        h3("Game Status"),
-        #paste("Time Elapsed: ", lubridate::seconds_to_period(rv$time_elapsed)),
-        br(),
-        paste(nrow(rv$click), " / ", sum(!rv$game$mine), "(", scales::percent(nrow(rv$click) / sum(!rv$game$mine)), ")"),
-        if (!rv$playing) h4("GAME OVER", style = "color:red")
-      )    
+        h4(paste(rv$wins, "Wins  --  ", rv$played - rv$wins, "Losses"))
+      )
     }
-
   })
   
+  # game status
+  output$status <- renderUI({
+    req(rv$game)
+    if (input$new_game > 0) {
+      div(
+        h3("Game Status"),
+        br(),
+        h4(
+          paste(
+            nrow(rv$click), " / ", sum(!rv$game$mine), 
+            "(", scales::percent(nrow(rv$click) / sum(!rv$game$mine)), ")"
+          )
+        ),
+        if (!rv$playing) 
+          h4("~~ GAME OVER ~~", style = "color:red")
+      )    
+    }
+  })
   
+  # last 100 games
+  output$history <- DT::renderDataTable({
+    req(history())
+    history() %>%
+      tail(100) %>%
+      dplyr::select(player, size, mines, result, score, time = time_elapsed) %>%
+      DT::datatable(
+        caption = "Gameplay History",
+        rownames = FALSE,
+        escape = FALSE,
+        selection = "none",
+        options = list(
+          dom = "tp",
+          pageLength = 5,
+          scrollX = T
+        ) 
+      ) %>%
+      DT::formatPercentage("score", digits = 1)
+  })
+  
+  # player vs. player history (bar graph)
+  output$player_plot <- renderPlot({
+    req(history())
+    history() %>% 
+      dplyr::mutate(
+        url = paste0("www/", player),
+        player = purrr::map_chr(url, ~as.character(tags$img(src = .x)))
+      ) %>% 
+      dplyr::group_by(url, player) %>% 
+      dplyr::summarize(
+        games = dplyr::n(), 
+        wins = sum(result == "win")
+      ) %>% 
+      dplyr::mutate(
+        pct = wins / games,
+        color = map_chr(url, slowly(~mean_emoji_color(.x), rate_delay(1)))
+        ) %>% 
+      ggplot(aes(x = player, y = games, color = color, fill = color)) + 
+      geom_bar(stat = "identity", alpha = .85) + 
+      geom_text(aes(label = games), position = position_dodge(width = 0.9), vjust = -0.25) +
+      labs(
+        x = NULL,
+        y = "Games Played",
+        title = "Character Totals"
+      ) +
+      scale_color_identity() +
+      scale_fill_identity() +
+      theme_minimal() +
+      theme(
+        axis.text.x = element_markdown()
+        ) 
+  })
 })

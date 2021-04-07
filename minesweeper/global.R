@@ -2,6 +2,8 @@ library(shiny)
 library(shinyjs)
 library(shinyWidgets)
 library(tidyverse)
+library(ggplot2)
+library(ggtext)
 
 
 # number of mines
@@ -140,3 +142,45 @@ bq_append <- function(data = NULL,
   # write to table
   bigrquery::bq_table_upload(xt, values = data, write_disposition = "WRITE_APPEND")
 }
+
+
+#' Get data from a BigQuery table
+#' @param ... filters
+#' @param dataset bigquery dataset
+#' @param table bigquery table
+#' @param project bigquery project
+#' @importFrom magrittr "%>%"
+#' @export
+bq_get <- function(..., 
+                   dataset, 
+                   table, 
+                   project = Sys.getenv("GOOGLE_PROJECT")) {
+  
+  bq_auth()
+  
+  con <- 
+    DBI::dbConnect(
+      bigrquery::bigquery(),
+      project = project,
+      dataset = dataset,
+      billing = project
+    )
+  
+  # convert list elements to rlang filters
+  filters <- rlang::quos(...)
+  
+  con %>%
+    dplyr::tbl(table) %>%
+    dplyr::filter(!!!filters) %>%
+    dplyr::collect()
+}
+
+
+# average color of an image
+mean_emoji_color <- function(x) {
+  data <- png::readPNG(x)
+  color_freq <- names(sort(table(rgb(data[,,1], data[,,2], data[,,3])), 
+                           decreasing = TRUE))
+  setdiff(color_freq, c("#FFFFFF", "#000000"))[1]
+}
+#bq_get(dataset = "minesweeper", table = "history")
