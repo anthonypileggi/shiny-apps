@@ -1,10 +1,17 @@
 library(shiny)
 library(shinyjs)
+library(shinydashboard)
 library(shinyWidgets)
 library(tidyverse)
 library(ggplot2)
 library(ggtext)
+library(bigrquery)
 
+# set environment variables (for shinyapps.io deployment)
+Sys.setenv(
+  "GOOGLE_PROJECT" = "stochastic-squirrel",
+  "GOOGLE_AUTH_FILE" = "stochastic-squirrel.json"
+  )
 
 # number of mines
 n <- 10
