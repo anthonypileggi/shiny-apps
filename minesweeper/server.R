@@ -239,6 +239,9 @@ shinyServer(function(input, output, session) {
     history() %>%
       tail(100) %>%
       dplyr::select(player, size, mines, result, score, time = time_elapsed) %>%
+      dplyr::mutate(
+        player = purrr::map_chr(player, ~as.character(tags$img(src = .x, style = "height:30px")))
+      ) %>%
       DT::datatable(
         caption = "Gameplay History",
         rownames = FALSE,
