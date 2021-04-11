@@ -16,6 +16,11 @@ library(magrittr)
 library(tidygraph)
 library(ggplot2)
 library(cowplot)
+library(magick)
+
+# TODO:
+# -- why does the direction-options fail later in the maze (does not match the plot!!!)
+# ------ test: walk thru maze to see where/when this happens
 
 # character for map (todo: customize this!)
 logo_file <- "frog.png"
@@ -43,21 +48,24 @@ server <- function(input, output, session) {
   maze <- reactive({
     input$new_game
     rv$loc <- dplyr::tibble(i = 1, j = 1)
-    maze1 <- makeGraph(10, 10)
-    makeMaze_dfs(maze1)
+    m <- makeGraph(10, 10)
+    makeMaze_dfs(m, inShiny = T)
   })
 
   maze_df <- reactive({
+    req(maze())
     tidygraph::as_tbl_graph(maze())
   })
 
   edges <- reactive({
+    req(maze_df())
     maze_df() %>%
       activate(edges) %>%
       as_tibble()
   })
 
   nodes <- reactive({
+    req(maze_df())
     maze_df() %>%
       activate(nodes) %>%
       as_tibble() %>%
@@ -110,11 +118,13 @@ server <- function(input, output, session) {
   })
 
   base_plot <- reactive({
+    req(maze())
     plotMaze(maze(), 10, 10, T)
   })
 
   this_plot <- reactive({
-    print(rv$loc)
+    req(base_plot())
+    req(rv$loc)
     base_plot() +
      # theme_bw() +
       draw_image(logo_file, x = rv$loc$i, y = rv$loc$j, hjust = 1, vjust = 1, halign = .5, valign = .5)
@@ -150,6 +160,8 @@ server <- function(input, output, session) {
 
   # is game over?
   observe({
+    req(nodes())
+    req(this_node())
     if (this_node()$id == max(nodes()$id)) {
       sendSweetAlert(
         session = session,
