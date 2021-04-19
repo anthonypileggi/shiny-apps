@@ -73,7 +73,8 @@ server <- function(input, output, session) {
         id = dplyr::row_number(),
         i = purrr::map_chr(name, ~stringr::str_split(.x, "_")[[1]][3]),
         j = purrr::map_chr(name, ~stringr::str_split(.x, "_")[[1]][2])
-      )
+      ) %>%
+      dplyr::mutate_at(dplyr::vars(i, j), as.integer)
   })
 
   # current location/node
@@ -148,8 +149,6 @@ server <- function(input, output, session) {
   # only allow moves that do not cross walls
   observe({
     req(moves())
-    print("MOVES")
-    print(moves())
     purrr::map(
       c("up", "down", "left", "right"),
       function(d)
