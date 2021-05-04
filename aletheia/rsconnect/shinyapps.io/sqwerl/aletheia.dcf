@@ -1,0 +1,12 @@
+name: aletheia
+title: aletheia
+username:
+account: sqwerl
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 4073498
+bundleId: 4553453
+url: https://sqwerl.shinyapps.io/aletheia/
+when: 1620096743.60674
+asMultiple: FALSE
+asStatic: FALSE
