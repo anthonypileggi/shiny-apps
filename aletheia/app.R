@@ -7,12 +7,20 @@ library(shinymanager)
 
 source("sputnik_funs.R")
 
+
+# Keywords
+keywords <- c(
+  "Turkey", "Turkiye", "USA", "ABD", "Russia", "Rusya", "covid19",
+  "vaccine", "aşı", "J&J", "Johnson and Johnson", "kan pıhtıları",
+  "clots", "Moderna", "Pfizer", "AstraZeneca", "China", "Çin"
+)
+
 # Credentials
 credentials <- data.frame(
-  user = c("sam", "anthony"),
-  password = c(scrypt::hashPassword("12345"), scrypt::hashPassword("12345")),
+  user = c("sam", "anthony", "scmcclintock"),
+  password = scrypt::hashPassword("12345"),
   is_hashed_password = TRUE,
-  comment = c("admin", "user"),
+  comment = "user",
   stringsAsFactors = FALSE
 )
 
@@ -20,12 +28,20 @@ credentials <- data.frame(
 ui <- dashboardPage(
   skin = "blue",
   dashboardHeader(
-    title = "Aletheia",
+    title = tags$span(
+      tags$img(
+        src = 'logo_light.png',
+        title = "Midsteam Technologies", 
+        height = "40px",
+        style = "float: left; padding-top:10px;"
+      ),
+      "Aletheia"
+    ),
     tags$li(
       tags$a(
         href = "http://midstream.us/",
         tags$img(
-          src = 'logo.png',
+          src = 'logo_light.png',
           title = "Midsteam Technologies", 
           height = "30px"
         ),
@@ -36,10 +52,12 @@ ui <- dashboardPage(
   ),
   dashboardSidebar(
     sidebarMenu(
+      id = "tabs",
       menuItem("Welcome", tabName = "welcome", icon = icon("bullhorn")),
       menuItem("Reports", tabName = "reports", icon = icon("flag")),
       menuItem("Keywords", tabName = "keywords", icon = icon("search")),
-      menuItem("Settings", tabName = "settings", icon = icon("cogs"))
+      menuItem("Settings", tabName = "settings", icon = icon("cogs")),
+      menuItem("Log Out", tabName = "logout", icon = icon("sign-out"))
     )
   ),
   dashboardBody(
@@ -49,7 +67,7 @@ ui <- dashboardPage(
       # add image on top ?
       tags_top = 
         tags$div(
-          tags$h4("Midstream Technology & WMLA", style = "align:center"),
+          tags$h4("Midstream Technology: Aletheia Access", style = "align:center"),
           tags$img(
             src = "logo.png", width = 100
           )
@@ -78,11 +96,13 @@ ui <- dashboardPage(
         tabName = "welcome",
         h2("Welcome to Aletheia"),
         tags$hr(),
-        tags$p(tags$strong("Analysts: "), "Please select either Reports or Settings from the menu at left."),
+        tags$p(tags$strong("Analysts: "), "please select from the menu at left"),
+        tags$br(),
+        tags$br(),
         tags$p(tags$strong("Last Report Run: "), "02May2021"),
         tags$p(tags$strong("Last Setting Change: "), "     28Apr2021"),
         tags$p(tags$strong("Latest Build: "), "16Apr2021, Vers. 8.1"),
-        tags$p(),
+        tags$br(),
         tags$p(tags$strong("Alerts as of 05May2021: "), "  None")
       ),
       
@@ -91,18 +111,33 @@ ui <- dashboardPage(
         box(
           width = 4,
           title = "Choose Report",
-          selectizeInput("report", label = "", choices = c(format(seq(Sys.Date() - 7, Sys.Date(), by = "day"))))
+          selectizeInput("report", label = "", choices = format(as.Date(c("2021-04-24", "2021-04-30", "2021-05-04")), by = "day")),
+          downloadButton("download", "Download (ZIP)")
         ),
         tabBox(
           id = "results_tabs",
           width = 8,
-          tabPanel("Data", "All Articles w/ links"),
-          tabPanel("Filtered", "Subset of data"),
           tabPanel(
-            "Network", 
-            tags$img(src = "network.png", width = "100%")
+            "Data",
+            DT::dataTableOutput("data")
             ),
-          tabPanel("Virality", "Exposure Weighting and Propagation Rates")
+          tabPanel(
+            "Filtered", 
+            DT::dataTableOutput("filtered")
+            ),
+          tabPanel(
+            "Network 1", 
+            tags$img(src = "sputnik_network.png", width = "100%")
+            ),
+          tabPanel(
+            "Network 2", 
+            tags$img(src = "network.png", width = "100%")
+          ),
+          tabPanel(
+            "Virality", 
+            tags$img(src = "virality.png", width = "100%")
+            ),
+          tabPanel("Alerts", "None")
         )
       ),
       
@@ -110,15 +145,29 @@ ui <- dashboardPage(
         tabName = "keywords",
         box(
           width = 4,
-          title = "Search Keywords",
-          textInput("keywords", label = "Keywords", placeholder = "covid, usa, biden, ..."),
-          uiOutput("keywords")
+          title = "Edit Keywords/Phrases",
+          tags$span("(must have edit privileges)"),
+          textInput("keywords", label = ""),
+          actionButton("add", "Add"),
+          actionButton("remove", "Remove")
         ),
         box(
           width = 8,
-          title = uiOutput("search_title"),
-          DT::dataTableOutput("search")
+          title = "Current Keywords and Phrases to Target",
+          column(width = 6, purrr::map(keywords[1:9], tags$p)),
+          column(width = 6, purrr::map(keywords[10:18], tags$p))
         )
+        # box(
+        #   width = 4,
+        #   title = "Search Keywords",
+        #   textInput("keywords", label = "Keywords", placeholder = "covid, usa, biden, ..."),
+        #   uiOutput("keywords")
+        # ),
+        # box(
+        #   width = 8,
+        #   title = uiOutput("search_title"),
+        #   DT::dataTableOutput("search")
+        # )
       ),
       
       tabItem(
@@ -137,37 +186,42 @@ server <- function(input, output) {
     check_credentials = check_credentials(credentials)
   )
   
-  rv <- reactiveValues(data = readr::read_csv("data.csv"), filtered = NULL, keywords = NULL)
-  
-  observeEvent(input$keywords, {
-    rv$keywords <- stringr::str_trim(stringr::str_split(input$keywords, ",")[[1]])
-    rv$keywords <- rv$keywords[nchar(rv$keywords) > 0]
-    rv$filtered <- filter_sputnik_articles(rv$data, rv$keywords)
-  })
-  
-  output$search <- DT::renderDataTable({
-    req(rv$filtered)
-    rv$filtered %>%
-      dplyr::arrange(desc(count)) %>%
-      dplyr::transmute(
-        Page = page,
-        Title = purrr::map2_chr(title, url, ~as.character(tags$a(.x, href = .y))),
-        Date = date,
-        Terms = found,
-        Hits = count
-      ) %>%
-    DT::datatable(
-      rownames = FALSE,
-      escape = FALSE,
-      selection = "multiple",
-      filter = "none",
-      options = list(
-        dom = "lftp",
-        scrollX = TRUE,
-        pageLength = 10
-      )
+  rv <- reactiveValues(
+    #data = readr::read_csv("data.csv"), 
+    data = readr::read_csv("sputnikStoryTweets.csv"),
+    filtered = readxl::read_xlsx("koronavirus_filtered_w_tweet_urls.xlsx"), 
+    keywords = NULL
     )
-  })
+  
+  # observeEvent(input$keywords, {
+  #   rv$keywords <- stringr::str_trim(stringr::str_split(input$keywords, ",")[[1]])
+  #   rv$keywords <- rv$keywords[nchar(rv$keywords) > 0]
+  #   rv$filtered <- filter_sputnik_articles(rv$data, rv$keywords)
+  # })
+  
+  # output$search <- DT::renderDataTable({
+  #   req(rv$filtered)
+  #   rv$filtered %>%
+  #     dplyr::arrange(desc(count)) %>%
+  #     dplyr::transmute(
+  #       Page = page,
+  #       Title = purrr::map2_chr(title, url, ~as.character(tags$a(.x, href = .y))),
+  #       Date = date,
+  #       Terms = found,
+  #       Hits = count
+  #     ) %>%
+  #   DT::datatable(
+  #     rownames = FALSE,
+  #     escape = FALSE,
+  #     selection = "multiple",
+  #     filter = "none",
+  #     options = list(
+  #       dom = "lftp",
+  #       scrollX = TRUE,
+  #       pageLength = 10
+  #     )
+  #   )
+  # })
   
   output$keywords <- renderUI({
     list(
@@ -184,6 +238,61 @@ server <- function(input, output) {
       nrow(rv$data),
       " links"
     )
+  })
+  
+  output$data <- DT::renderDataTable({
+    req(rv$data)
+    rv$data %>%
+      DT::datatable(
+        rownames = FALSE,
+        escape = FALSE,
+        selection = "multiple",
+        filter = "none",
+        options = list(
+          dom = "lftp",
+          scrollX = TRUE,
+          pageLength = 10
+        )
+      )
+  })
+  
+  output$filtered <- DT::renderDataTable({
+    req(rv$filtered)
+    rv$filtered %>%
+      DT::datatable(
+        rownames = FALSE,
+        escape = FALSE,
+        selection = "multiple",
+        filter = "none",
+        options = list(
+          dom = "lftp",
+          scrollX = TRUE,
+          pageLength = 10
+        )
+      )
+  })
+  
+  output$download <- downloadHandler(
+    filename = function() {
+      paste0("aletheia-report-", input$report, ".zip")
+    },
+    content = function(fname) {
+      fs <- c()
+      tmpdir <- tempdir()
+      setwd(tempdir())
+      for (i in c(1,2,3,4,5)) {
+        path <- paste0("sample_", i, ".csv")
+        fs <- c(fs, path)
+        write(i*2, path)
+      }
+      zip(zipfile=fname, files=fs)
+    },
+    contentType = "application/zip"
+  )
+  
+  observeEvent(input$tabs, {
+    if (input$tabs == "logout")
+      stopApp()
   })
 }
 
